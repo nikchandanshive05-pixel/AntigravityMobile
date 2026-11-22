@@ -22,6 +22,7 @@ import com.antigravity.mobile.ui.components.SidebarDrawer
 import com.antigravity.mobile.ui.screens.ChatScreen
 import com.antigravity.mobile.ui.screens.ManualPairingDialog
 import com.antigravity.mobile.ui.theme.AntigravityTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -33,6 +34,9 @@ class MainActivity : ComponentActivity() {
     companion object {
         var instance: MainActivity? = null
             private set
+        const val DEFAULT_PC_IP = "192.168.31.136"
+        const val DEFAULT_PORT = 8765
+        const val DEFAULT_PIN = "1425"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,67 +50,48 @@ class MainActivity : ComponentActivity() {
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                 val scope = rememberCoroutineScope()
 
-                var connectionState by remember { mutableStateOf<ConnectionState>(ConnectionState.Discovering) }
+                var connectionState by remember { mutableStateOf<ConnectionState>(ConnectionState.Connecting) }
                 val messages = remember { mutableStateListOf<ChatMessage>() }
                 val conversations = remember { mutableStateListOf<ConversationItem>() }
                 var currentConversationId by remember { mutableStateOf<String?>(null) }
-                var pendingHost by remember { mutableStateOf<String?>(null) }
-                var pendingPort by remember { mutableStateOf(8765) }
-                var showPinPrompt by remember { mutableStateOf(false) }
 
-                // Add welcome initial message
                 LaunchedEffect(Unit) {
-                    if (messages.isEmpty()) {
-                        messages.add(
-                            ChatMessage(
-                                id = "welcome",
-                                sender = Sender.AGENT,
-                                content = "Welcome to Antigravity Mobile. Searching for your PC on local Wi-Fi..."
-                            )
-                        )
+                    val targetHost = prefs.getString("last_host", DEFAULT_PC_IP) ?: DEFAULT_PC_IP
+                    val targetPort = prefs.getInt("last_port", DEFAULT_PORT)
+                    val targetPin = prefs.getString("last_pin", DEFAULT_PIN) ?: DEFAULT_PIN
+
+                    // Instant Direct Connect to PC
+                    launch {
+                        while (true) {
+                            if (connectionState !is ConnectionState.Connected) {
+                                connectionState = ConnectionState.Connecting
+                                socketClient.connect(targetHost, targetPort, targetPin)
+                            }
+                            delay(6000)
+                        }
                     }
 
-                    // Start mDNS Discovery
+                    // Parallel mDNS Auto-Discovery
                     launch {
                         discoveryManager.discoverServices().collect { event ->
-                            when (event) {
-                                is DiscoveryEvent.Found -> {
-                                    pendingHost = event.host
-                                    pendingPort = event.port
-                                    val savedPin = prefs.getString("last_pin", null)
-                                    if (!savedPin.isNullOrEmpty()) {
-                                        connectionState = ConnectionState.Connecting
-                                        socketClient.connect(event.host, event.port, savedPin)
-                                    } else {
-                                        connectionState = ConnectionState.PairingRequired(event.host, event.port)
-                                        showPinPrompt = true
-                                    }
-                                }
-                                is DiscoveryEvent.Lost -> {
-                                    connectionState = ConnectionState.Disconnected
-                                }
-                                is DiscoveryEvent.Error -> {
-                                    connectionState = ConnectionState.Error(event.message)
-                                }
+                            if (event is DiscoveryEvent.Found && connectionState !is ConnectionState.Connected) {
+                                socketClient.connect(event.host, event.port, targetPin)
                             }
                         }
                     }
 
-                    // Collect Socket Events
+                    // Process Socket Events
                     launch {
                         socketClient.events.collect { event ->
                             when (event) {
                                 is SocketEvent.Connected -> {
-                                    connectionState = ConnectionState.Connected("PC", pendingPort, "Desktop")
+                                    connectionState = ConnectionState.Connected("PC", targetPort, "NIKHIL-PC")
                                     socketClient.requestConversations()
                                     startCompanionService()
                                 }
                                 is SocketEvent.Authenticated -> {
+                                    connectionState = ConnectionState.Connected("PC", targetPort, "NIKHIL-PC")
                                     prefs.edit().putString("auth_token", event.token).apply()
-                                }
-                                is SocketEvent.AuthFailed -> {
-                                    connectionState = ConnectionState.Error("Authentication failed: ${event.reason}")
-                                    showPinPrompt = true
                                 }
                                 is SocketEvent.TokenChunk -> {
                                     val last = messages.lastOrNull()
@@ -133,7 +118,6 @@ class MainActivity : ComponentActivity() {
                                             pendingApproval = event.action
                                         )
                                     )
-                                    // Trigger Heads-Up Lock Screen Notification
                                     showApprovalHeadsUp(event.action.id, event.action.description)
                                 }
                                 is SocketEvent.ActionResolved -> {
@@ -166,18 +150,12 @@ class MainActivity : ComponentActivity() {
                             currentConversationId = currentConversationId,
                             onSelectConversation = { convId ->
                                 currentConversationId = convId
+                                messages.clear()
                                 socketClient.selectConversation(convId)
                             },
                             onNewConversation = {
                                 currentConversationId = null
                                 messages.clear()
-                                messages.add(
-                                    ChatMessage(
-                                        id = "new",
-                                        sender = Sender.AGENT,
-                                        content = "New conversation started on PC."
-                                    )
-                                )
                             },
                             onCloseDrawer = {
                                 scope.launch { drawerState.close() }
@@ -208,23 +186,15 @@ class MainActivity : ComponentActivity() {
                             scope.launch { drawerState.open() }
                         },
                         onManualConnect = { host, port, pin ->
+                            prefs.edit()
+                                .putString("last_host", host)
+                                .putInt("last_port", port)
+                                .putString("last_pin", pin)
+                                .apply()
                             connectionState = ConnectionState.Connecting
-                            prefs.edit().putString("last_pin", pin).apply()
                             socketClient.connect(host, port, pin)
                         },
                         modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                if (showPinPrompt && pendingHost != null) {
-                    ManualPairingDialog(
-                        onDismiss = { showPinPrompt = false },
-                        onConnect = { host, port, pin ->
-                            showPinPrompt = false
-                            prefs.edit().putString("last_pin", pin).apply()
-                            connectionState = ConnectionState.Connecting
-                            socketClient.connect(host, port, pin)
-                        }
                     )
                 }
             }

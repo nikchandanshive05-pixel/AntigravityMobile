@@ -4,58 +4,47 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-val PrimaryPurple = Color(0xFF7C3AED)
-val ElectricCyan = Color(0xFF06B6D4)
-val DarkBackground = Color(0xFF0F172A)
-val SurfaceDark = Color(0xFF1E293B)
-val UserBubbleDark = Color(0xFF334155)
-val AgentText = Color(0xFFF1F5F9)
-val ToolCardBg = Color(0xFF0B132B)
-val ApprovedGreen = Color(0xFF10B981)
-val DeniedRed = Color(0xFFEF4444)
+// Google Gemini Official Palette
+val GeminiBg = Color(0xFF131314)
+val GeminiSurface = Color(0xFF1E1F20)
+val GeminiSurfaceLight = Color(0xFF282A2C)
+val GeminiUserBubble = Color(0xFF2B2D30)
+val GeminiText = Color(0xFFE3E3E3)
+val GeminiTextSecondary = Color(0xFF9E9E9E)
 
-private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryPurple,
-    secondary = ElectricCyan,
-    background = DarkBackground,
-    surface = SurfaceDark,
-    onPrimary = Color.White,
-    onSecondary = Color.Black,
-    onBackground = AgentText,
-    onSurface = AgentText
+// Gemini Signature Gradient Colors
+val GeminiBlue = Color(0xFF4285F4)
+val GeminiPurple = Color(0xFF9B72CB)
+val GeminiCoral = Color(0xFFD96570)
+val GeminiCyan = Color(0xFF00E5FF)
+
+val GeminiSparkleGradient = Brush.linearGradient(
+    colors = listOf(GeminiBlue, GeminiPurple, GeminiCoral)
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = PrimaryPurple,
-    secondary = ElectricCyan,
-    background = Color(0xFFF8FAFC),
-    surface = Color.White,
+val DarkColorScheme = darkColorScheme(
+    primary = GeminiBlue,
+    secondary = GeminiPurple,
+    tertiary = GeminiCyan,
+    background = GeminiBg,
+    surface = GeminiSurface,
     onPrimary = Color.White,
-    onSecondary = Color.Black,
-    onBackground = Color(0xFF0F172A),
-    onSurface = Color(0xFF0F172A)
+    onSecondary = Color.White,
+    onBackground = GeminiText,
+    onSurface = GeminiText
 )
 
 @Composable
 fun AntigravityTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    darkTheme: Boolean = true, // Default to Gemini Dark
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = DarkColorScheme,
         content = content
     )
 }
