@@ -22,6 +22,12 @@ val GeminiPurple = Color(0xFF9B72CB)
 val GeminiCoral = Color(0xFFD96570)
 val GeminiCyan = Color(0xFF00E5FF)
 
+// Status & Tool Colors
+val ApprovedGreen = Color(0xFF34A853)
+val DeniedRed = Color(0xFFEA4335)
+val ElectricCyan = GeminiCyan
+val ToolCardBg = Color(0xFF1E1F20)
+
 val GeminiSparkleGradient = Brush.linearGradient(
     colors = listOf(GeminiBlue, GeminiPurple, GeminiCoral)
 )
