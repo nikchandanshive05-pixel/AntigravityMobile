@@ -15,8 +15,8 @@ sealed class SocketEvent {
     data class Authenticated(val token: String) : SocketEvent()
     data class AuthFailed(val reason: String) : SocketEvent()
     data class TokenChunk(val delta: String) : SocketEvent()
-    data class MessageReceived(val message: ChatMessage) : SocketEvent()
-    data class ToolUpdated(val toolCall: ToolCall) : SocketEvent()
+    object StreamEnd : SocketEvent()
+    data class HistoryReceived(val conversationId: String, val messages: List<ChatMessage>) : SocketEvent()
     data class ActionRequested(val action: ActionApproval) : SocketEvent()
     data class ActionResolved(val actionId: String, val status: ApprovalStatus) : SocketEvent()
     data class ConversationsList(val items: List<ConversationItem>) : SocketEvent()
@@ -44,7 +44,6 @@ class AntigravitySocketClient {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d("WebSocket", "Connected to $url, sending auth handshake...")
                 _events.tryEmit(SocketEvent.Connected)
-                // Send PIN authentication
                 val authPayload = JSONObject().apply {
                     put("type", "auth")
                     put("pin", pin)
@@ -65,6 +64,46 @@ class AntigravitySocketClient {
                         }
                         "token" -> {
                             _events.tryEmit(SocketEvent.TokenChunk(json.optString("delta", "")))
+                        }
+                        "stream_end" -> {
+                            _events.tryEmit(SocketEvent.StreamEnd)
+                        }
+                        "conversation_history" -> {
+                            val convId = json.optString("conversation_id")
+                            val arr = json.optJSONArray("messages") ?: return
+                            val historyList = mutableListOf<ChatMessage>()
+                            for (i in 0 until arr.length()) {
+                                val obj = arr.getJSONObject(i)
+                                val senderStr = obj.optString("sender", "AGENT")
+                                val sender = if (senderStr == "USER") Sender.USER else Sender.AGENT
+                                val content = obj.optString("content", "")
+                                
+                                val toolList = mutableListOf<ToolCall>()
+                                val toolArr = obj.optJSONArray("tool_calls")
+                                if (toolArr != null) {
+                                    for (j in 0 until toolArr.length()) {
+                                        val tObj = toolArr.getJSONObject(j)
+                                        toolList.add(
+                                            ToolCall(
+                                                id = tObj.optString("id", "t-$j"),
+                                                toolName = tObj.optString("tool_name", "tool"),
+                                                summary = tObj.optString("summary", ""),
+                                                status = ToolStatus.COMPLETED
+                                            )
+                                        )
+                                    }
+                                }
+
+                                historyList.add(
+                                    ChatMessage(
+                                        id = obj.optString("id", "msg-$i"),
+                                        sender = sender,
+                                        content = content,
+                                        toolCalls = toolList
+                                    )
+                                )
+                            }
+                            _events.tryEmit(SocketEvent.HistoryReceived(convId, historyList))
                         }
                         "action_pending" -> {
                             val act = ActionApproval(

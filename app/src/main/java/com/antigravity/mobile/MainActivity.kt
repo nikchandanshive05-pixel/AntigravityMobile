@@ -93,6 +93,11 @@ class MainActivity : ComponentActivity() {
                                     connectionState = ConnectionState.Connected("PC", targetPort, "NIKHIL-PC")
                                     prefs.edit().putString("auth_token", event.token).apply()
                                 }
+                                is SocketEvent.HistoryReceived -> {
+                                    currentConversationId = event.conversationId
+                                    messages.clear()
+                                    messages.addAll(event.messages)
+                                }
                                 is SocketEvent.TokenChunk -> {
                                     val last = messages.lastOrNull()
                                     if (last != null && last.sender == Sender.AGENT && last.isStreaming) {
@@ -107,6 +112,13 @@ class MainActivity : ComponentActivity() {
                                                 isStreaming = true
                                             )
                                         )
+                                    }
+                                }
+                                is SocketEvent.StreamEnd -> {
+                                    val last = messages.lastOrNull()
+                                    if (last != null && last.sender == Sender.AGENT && last.isStreaming) {
+                                        val idx = messages.indexOf(last)
+                                        messages[idx] = last.copy(isStreaming = false)
                                     }
                                 }
                                 is SocketEvent.ActionRequested -> {
@@ -167,6 +179,7 @@ class MainActivity : ComponentActivity() {
                         messages = messages,
                         connectionState = connectionState,
                         onSendMessage = { prompt ->
+                            // 1. Add User Message
                             messages.add(
                                 ChatMessage(
                                     id = "usr-${System.currentTimeMillis()}",
@@ -174,6 +187,16 @@ class MainActivity : ComponentActivity() {
                                     content = prompt
                                 )
                             )
+                            // 2. Add Immediate Agent Response Bubble with Streaming State
+                            messages.add(
+                                ChatMessage(
+                                    id = "agent-${System.currentTimeMillis()}",
+                                    sender = Sender.AGENT,
+                                    content = "",
+                                    isStreaming = true
+                                )
+                            )
+                            // 3. Send over WebSocket to trigger Antigravity agent
                             socketClient.sendPrompt(prompt, currentConversationId)
                         },
                         onApproveAction = { actionId ->

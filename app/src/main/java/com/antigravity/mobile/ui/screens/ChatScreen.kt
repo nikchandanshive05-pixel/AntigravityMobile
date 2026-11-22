@@ -330,6 +330,26 @@ fun GeminiChatBubble(
                     color = GeminiText,
                     modifier = Modifier.padding(start = 30.dp)
                 )
+            } else if (message.isStreaming) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 30.dp, top = 4.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = GeminiPurple,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Thinking...",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 14.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        ),
+                        color = GeminiTextSecondary
+                    )
+                }
             }
 
             // Embedded Tool Calls
